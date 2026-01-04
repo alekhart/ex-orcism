@@ -8,9 +8,12 @@ import {
   Animated,
   Dimensions,
   ScrollView,
+  Platform,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import * as Haptics from 'expo-haptics';
+import * as Sharing from 'expo-sharing';
+import { captureRef } from 'react-native-view-shot';
 
 const { width } = Dimensions.get('window');
 
@@ -26,11 +29,11 @@ const breakupQuotes = [
 ];
 
 const destructionMethods = [
-  { name: "🔥 Burn It", emoji: "🔥", verb: "incinerated", colors: ['#f97316', '#dc2626'] },
-  { name: "🕳️ Black Hole", emoji: "🌀", verb: "consumed by the void", colors: ['#581c87', '#000000'] },
-  { name: "🚀 Launch to Space", emoji: "🚀", verb: "yeeted into orbit", colors: ['#2563eb', '#9333ea'] },
-  { name: "🦈 Feed to Sharks", emoji: "🦈", verb: "fed to sharks", colors: ['#38bdf8', '#1d4ed8'] },
-  { name: "⚡ Smite", emoji: "⚡", verb: "smote by divine justice", colors: ['#facc15', '#d97706'] },
+  { name: "🔥 Burn It", emoji: "🔥", verb: "incinerated", pastTense: "INCINERATED", colors: ['#f97316', '#dc2626'] },
+  { name: "🕳️ Black Hole", emoji: "🌀", verb: "consumed by the void", pastTense: "CONSUMED BY THE VOID", colors: ['#581c87', '#000000'] },
+  { name: "🚀 Launch to Space", emoji: "🚀", verb: "yeeted into orbit", pastTense: "YEETED INTO ORBIT", colors: ['#2563eb', '#9333ea'] },
+  { name: "🦈 Feed to Sharks", emoji: "🦈", verb: "fed to sharks", pastTense: "FED TO SHARKS", colors: ['#38bdf8', '#1d4ed8'] },
+  { name: "⚡ Smite", emoji: "⚡", verb: "smote by divine justice", pastTense: "SMOTE BY DIVINE JUSTICE", colors: ['#facc15', '#d97706'] },
 ];
 
 const pettyAffirmations = [
@@ -42,6 +45,84 @@ const pettyAffirmations = [
   "You were the plot. They were just a filler episode.",
 ];
 
+// Share card templates - randomly selected
+const shareCardTemplates = [
+  // Celebration/Freedom
+  {
+    emoji: "✨",
+    header: "OFFICIALLY BANISHED",
+    subtext: "is no longer your problem",
+  },
+  {
+    emoji: "🎉",
+    header: "FREEDOM UNLOCKED",
+    subtext: "has been removed from the narrative",
+  },
+  {
+    emoji: "⭐",
+    header: "MAIN CHARACTER STATUS RESTORED",
+    subtext: "has exited the chat",
+  },
+  // Playful/Meme
+  {
+    emoji: "🚫",
+    header: "BLOCKED BY THE UNIVERSE",
+    subtext: "Access Denied",
+  },
+  {
+    emoji: "📤",
+    header: "SUCCESSFULLY UNSUBSCRIBED",
+    subtext: "'s nonsense - No longer in your inbox",
+  },
+  {
+    emoji: "🗑️",
+    header: "RECYCLED",
+    subtext: "has been composted into personal growth",
+  },
+  // Dramatic/Fantasy
+  {
+    emoji: "⚔️",
+    header: "BANISHED TO THE SHADOW REALM",
+    subtext: "shall not return",
+  },
+  {
+    emoji: "🌌",
+    header: "SENT TO THE VOID",
+    subtext: "Status: Forgotten",
+  },
+  {
+    emoji: "🔮",
+    header: "THE SPIRITS HAVE SPOKEN",
+    subtext: "has been ex-orcised",
+  },
+  // Petty/Funny
+  {
+    emoji: "👋",
+    header: "BYE FOREVER",
+    subtext: "It's not me, it's definitely you",
+  },
+  {
+    emoji: "💅",
+    header: "OFFICIALLY OVER IT",
+    subtext: "who? Don't know them.",
+  },
+  {
+    emoji: "🧹",
+    header: "CLEANSED",
+    subtext: "energy has been removed from your life",
+  },
+];
+
+const getFormattedDate = () => {
+  const date = new Date();
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  return `${months[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()}`;
+};
+
+const getRandomTemplate = () => {
+  return shareCardTemplates[Math.floor(Math.random() * shareCardTemplates.length)];
+};
+
 export default function App() {
   const [stage, setStage] = useState('input');
   const [exName, setExName] = useState('');
@@ -49,6 +130,11 @@ export default function App() {
   const [quote, setQuote] = useState('');
   const [affirmation, setAffirmation] = useState('');
   const [ritualProgress, setRitualProgress] = useState(0);
+  const [isSharing, setIsSharing] = useState(false);
+  const [cardTemplate, setCardTemplate] = useState(shareCardTemplates[0]);
+
+  // Refs
+  const shareCardRef = useRef();
 
   // Animations
   const floatAnim = useRef(new Animated.Value(0)).current;
@@ -149,6 +235,7 @@ export default function App() {
     ]).start(() => {
       setStage('destroyed');
       setQuote(breakupQuotes[Math.floor(Math.random() * breakupQuotes.length)]);
+      setCardTemplate(getRandomTemplate());
     });
   };
 
@@ -156,6 +243,40 @@ export default function App() {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setAffirmation(pettyAffirmations[Math.floor(Math.random() * pettyAffirmations.length)]);
     setStage('affirmation');
+  };
+
+  const shareResult = async () => {
+    try {
+      setIsSharing(true);
+      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      
+      // Check if sharing is available
+      const isAvailable = await Sharing.isAvailableAsync();
+      
+      if (!isAvailable) {
+        alert('Sharing is not available on this device');
+        setIsSharing(false);
+        return;
+      }
+
+      // Capture the share card as an image
+      const uri = await captureRef(shareCardRef, {
+        format: 'png',
+        quality: 1,
+      });
+
+      // Share the image
+      await Sharing.shareAsync(uri, {
+        mimeType: 'image/png',
+        dialogTitle: 'Share your ex-orcism!',
+      });
+      
+    } catch (error) {
+      console.error('Error sharing:', error);
+      alert('Could not capture image. Try again!');
+    } finally {
+      setIsSharing(false);
+    }
   };
 
   const reset = () => {
@@ -242,9 +363,39 @@ export default function App() {
         {/* Destroyed Stage */}
         {stage === 'destroyed' && selectedMethod && (
           <View style={styles.destroyedContainer}>
-            <Text style={styles.destroyedEmoji}>✨</Text>
-            <Text style={styles.destroyedTitle}>Successfully {selectedMethod.verb}!</Text>
+            
+            {/* Shareable Card - This gets captured */}
+            <View 
+              ref={shareCardRef}
+              style={styles.shareCard}
+              collapsable={false}
+            >
+              <View style={styles.shareCardInner}>
+                <Text style={styles.shareCardEmoji}>{cardTemplate.emoji}</Text>
+                <Text style={styles.shareCardHeader}>{cardTemplate.header}</Text>
+                <View style={styles.shareCardDivider} />
+                <Text style={styles.shareCardName}>{exName.toUpperCase()}</Text>
+                <Text style={styles.shareCardSubtext}>{cardTemplate.subtext}</Text>
+                <View style={styles.shareCardDivider} />
+                <Text style={styles.shareCardMethod}>{selectedMethod.pastTense}</Text>
+                <Text style={styles.shareCardDate}>{getFormattedDate()}</Text>
+                <View style={styles.shareCardFooter}>
+                  <Text style={styles.shareCardBrand}>👻 Ex-Orcism</Text>
+                </View>
+              </View>
+            </View>
+
             <Text style={styles.quoteText}>{quote}</Text>
+
+            <TouchableOpacity 
+              style={styles.shareButton} 
+              onPress={shareResult}
+              disabled={isSharing}
+            >
+              <Text style={styles.buttonText}>
+                {isSharing ? '📤 Preparing...' : '📤 Share Your Ex-Orcism'}
+              </Text>
+            </TouchableOpacity>
 
             <TouchableOpacity style={styles.pettyButton} onPress={getPettyAffirmation}>
               <Text style={styles.buttonText}>💅 Get Petty Affirmation</Text>
@@ -381,27 +532,98 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 16,
   },
-  destroyedEmoji: {
-    fontSize: 80,
+  // Share Card Styles
+  shareCard: {
+    backgroundColor: '#1a1025',
+    borderRadius: 20,
+    padding: 4,
+    marginBottom: 10,
   },
-  destroyedTitle: {
-    fontSize: 24,
+  shareCardInner: {
+    backgroundColor: '#0f0a15',
+    borderRadius: 16,
+    padding: 24,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#a855f7',
+    minWidth: 280,
+  },
+  shareCardEmoji: {
+    fontSize: 50,
+    marginBottom: 8,
+  },
+  shareCardHeader: {
+    fontSize: 14,
+    color: '#c084fc',
+    letterSpacing: 2,
     fontWeight: 'bold',
-    color: '#4ade80',
     textAlign: 'center',
+    marginBottom: 8,
+  },
+  shareCardName: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#ffffff',
+    textAlign: 'center',
+    marginVertical: 8,
+  },
+  shareCardSubtext: {
+    fontSize: 14,
+    color: '#9ca3af',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  shareCardDivider: {
+    width: 60,
+    height: 2,
+    backgroundColor: '#a855f7',
+    marginVertical: 8,
+  },
+  shareCardMethod: {
+    fontSize: 11,
+    color: '#6b7280',
+    letterSpacing: 1,
+    marginBottom: 4,
+    textAlign: 'center',
+  },
+  shareCardDate: {
+    fontSize: 12,
+    color: '#6b7280',
+    marginBottom: 12,
+  },
+  shareCardFooter: {
+    borderTopWidth: 1,
+    borderTopColor: '#374151',
+    paddingTop: 12,
+    width: '100%',
+    alignItems: 'center',
+  },
+  shareCardBrand: {
+    fontSize: 16,
+    color: '#a855f7',
+    fontWeight: '600',
   },
   quoteText: {
     fontSize: 18,
     color: '#e9d5ff',
     textAlign: 'center',
     paddingHorizontal: 20,
+    marginTop: 8,
+  },
+  shareButton: {
+    backgroundColor: '#059669',
+    paddingVertical: 16,
+    paddingHorizontal: 32,
+    borderRadius: 12,
+    marginTop: 20,
+    width: '100%',
+    alignItems: 'center',
   },
   pettyButton: {
     backgroundColor: '#a855f7',
     paddingVertical: 16,
     paddingHorizontal: 32,
     borderRadius: 12,
-    marginTop: 20,
     width: '100%',
     alignItems: 'center',
   },
